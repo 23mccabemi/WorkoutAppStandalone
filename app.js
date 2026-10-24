@@ -267,7 +267,7 @@ function vToday() {
   const thisWeek = S.workouts.filter((w) => w.end >= ws).length;
   const cards = [];
 
-  if (!S.sleep[ymd()] && now.getHours() < 15) cards.push(sleepCard());
+  if (!S.sleep[ymd()] && S.sleepAsked !== ymd()) cards.push(sleepCard(true));
   if (isDeload()) cards.push(`<div class="card note"><h3>Lighter week</h3><p>This is week 6, the recovery week. Half the sets at your normal weights, and stop each set with 3 or more reps left. You'll come back stronger next week.</p><button class="btn ghost small" data-a="skipDeload">Skip it this time</button></div>`);
   const adv = deloadAdvice();
   if (adv) cards.push(`<div class="card note"><h3>Maybe take a lighter week?</h3><p>${adv} A lighter week now usually helps more than pushing through.</p><div class="row gap"><button class="btn small" data-a="deloadNow">Start lighter week</button></div></div>`);
@@ -307,9 +307,9 @@ function vToday() {
   </div>`;
 }
 
-function sleepCard() {
+function sleepCard(once) {
   return `<div class="card">
-    <h3>How did you sleep?</h3>
+    <div class="row between"><h3>How did you sleep last night?</h3>${once ? '<button class="link" data-a="skipSleep">Skip</button>' : ""}</div>
     <div class="row between"><span class="muted">Hours</span>${stepper("sleepH", ui.sleepH ?? 7.5, "h")}</div>
     <div class="seg">${["Poor", "Okay", "Great"].map((q) => `<button class="${ui.sleepQ === q ? "on" : ""}" data-a="sleepQ" data-q="${q}">${q}</button>`).join("")}</div>
     <button class="btn wide" data-a="saveSleep">Save</button>
@@ -517,7 +517,7 @@ function vLog() {
   </div>
   <div class="card">
     <h3>Sleep</h3>
-    ${todaySleep ? `<p>Last night: <b>${todaySleep.h} h</b>, ${esc(todaySleep.q || "")} <button class="link" data-a="redoSleep">change</button></p>` : sleepCard().replace('<div class="card">', "<div>").replace("<h3>How did you sleep?</h3>", "")}
+    ${todaySleep ? `<p>Last night: <b>${todaySleep.h} h</b>, ${esc(todaySleep.q || "")} <button class="link" data-a="redoSleep">change</button></p>` : sleepCard().replace('<div class="card">', "<div>").replace(/<div class="row between"><h3>.*?<\/h3><\/div>/, "")}
     ${bars(nights, 9, 8)}
     <p class="muted small">The line marks 8 hours. Muscle is built while you sleep, so 7 to 9 hours makes a big difference.</p>
   </div>
@@ -821,11 +821,12 @@ const ACT = {
     S.cur = null; save(); letSleep(); render();
     toast(st.prs.length ? `Saved. ${st.prs.length} new best${st.prs.length > 1 ? "s" : ""}!` : "Saved. See you next time!");
   },
+  skipSleep: () => { S.sleepAsked = ymd(); save(); render(); },
   sleepQ: (d) => { ui.sleepQ = d.q; render(); },
   saveSleep: () => {
     const h = num(document.querySelector('[data-in="sleepH"]')?.value) ?? ui.sleepH ?? 7.5;
     S.sleep[ymd()] = { h, q: ui.sleepQ || "Okay" };
-    ui.sleepH = null; ui.sleepQ = null; save(); render(); toast("Sleep saved");
+    S.sleepAsked = ymd(); ui.sleepH = null; ui.sleepQ = null; save(); render(); toast("Sleep saved");
   },
   redoSleep: () => { const s = S.sleep[ymd()]; ui.sleepH = s?.h; ui.sleepQ = s?.q; delete S.sleep[ymd()]; save(); render(); },
   addP: (d) => { (S.protein[ymd()] ||= []).push({ g: +d.g, label: d.l, t: Date.now() }); save(); render(); toast(`+${d.g} g protein`); },
