@@ -254,65 +254,58 @@ function vSetup() {
       <li><b>Every 6th week is lighter</b> so your body can catch up.</li>
     </ul>
   </div>
-  <button class="btn primary wide" data-a="finishSetup">Let's lift</button>
+  <button class="btn filled wide" data-a="finishSetup">Let's lift</button>
   </div>`;
 }
+
+const FOCUS = { push: "Chest, shoulders, triceps", pull: "Back, rear delts, biceps", legs: "Legs" };
+function focusOf(d) { return d.sub || FOCUS[d.id.split("_")[0]] || [...new Set(d.items.map((i) => primary(i.ex)))].slice(0, 3).join(", "); }
+function minutesOf(d) { const s = d.items.reduce((a, i) => a + i.sets * (i.rest + 45), 0); return Math.max(20, Math.round(s / 60 / 5) * 5); }
+const CHEV = `<svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>`;
 
 function vToday() {
   if (!S.profile) return vSetup();
   if (S.cur) return S.cur.finishing ? vSummary() : vWorkout();
-  const day = S.plan[S.next % S.plan.length];
+  const ni = S.next % S.plan.length, day = S.plan[ni];
   const now = new Date();
-  const ws = weekStart();
-  const thisWeek = S.workouts.filter((w) => w.end >= ws).length;
+  const thisWeek = S.workouts.filter((w) => w.end >= weekStart()).length;
   const cards = [];
 
   if (!S.sleep[ymd()] && S.sleepAsked !== ymd()) cards.push(sleepCard(true));
-  if (isDeload()) cards.push(`<div class="card note"><h3>Lighter week</h3><p>This is week 6, the recovery week. Half the sets at your normal weights, and stop each set with 3 or more reps left. You'll come back stronger next week.</p><button class="btn ghost small" data-a="skipDeload">Skip it this time</button></div>`);
+  if (isDeload()) cards.push(`<div class="card tonal"><h3>Lighter week</h3><p>Week 6 is for recovery. Half the sets at your normal weights, and stop each set with 3 or more reps left. You'll come back stronger.</p><button class="btn text" data-a="skipDeload">Skip it this time</button></div>`);
   const adv = deloadAdvice();
-  if (adv) cards.push(`<div class="card note"><h3>Maybe take a lighter week?</h3><p>${adv} A lighter week now usually helps more than pushing through.</p><div class="row gap"><button class="btn small" data-a="deloadNow">Start lighter week</button></div></div>`);
-  if (S.workouts.length >= 5 && (!S.lastBackup || Date.now() - S.lastBackup > 30 * DAY)) cards.push(`<div class="card note"><h3>Save a backup</h3><p>Your workouts only live on this phone. A backup file keeps them safe if anything happens to it.</p><button class="btn small" data-a="export">Save backup</button></div>`);
+  if (adv) cards.push(`<div class="card tonal"><h3>Maybe take a lighter week?</h3><p>${adv} A lighter week now usually helps more than pushing through.</p><button class="btn tonal-btn" data-a="deloadNow">Start lighter week</button></div>`);
+  if (S.workouts.length >= 5 && (!S.lastBackup || Date.now() - S.lastBackup > 30 * DAY)) cards.push(`<div class="card tonal"><h3>Save a backup</h3><p>Your workouts only live on this phone. A backup file keeps them safe.</p><button class="btn tonal-btn" data-a="export">Save backup</button></div>`);
 
-  const sub = day.sub ? `<span class="muted"> · ${esc(day.sub)}</span>` : "";
-  const dl = isDeload();
-  const list = day.items.map((it) => {
-    const sets = dl ? Math.max(1, Math.ceil(it.sets / 2)) : it.sets;
-    return `<li><span>${esc(EX(it.ex).name)}</span><span class="muted">${sets} × ${it.min}–${it.max}</span></li>`;
-  }).join("");
-
+  const others = S.plan.map((d, i) => i === ni ? "" : `<button class="btn outline" data-a="startDay" data-i="${i}">${esc(d.name)}</button>`).join("");
   const pg = proteinOn(), pt = proteinTarget();
-  return `<header class="hero">
-    ${frog(58)}
-    <div><div class="muted small">${WEEKDAY[now.getDay()]}</div><h1>Today: ${esc(day.name)}</h1></div>
-  </header>
+  return `<header class="page-head"><div><div class="eyebrow">${WEEKDAY[now.getDay()]}</div><h1>Let's lift</h1></div>${frog(60)}</header>
   ${cards.join("")}
-  <div class="card">
-    <div class="row between"><h2>${esc(day.name)}${sub}</h2><span class="pill">${day.items.length} lifts</span></div>
-    <ul class="exlist">${list}</ul>
-    <button class="btn primary wide" data-a="start">Start workout</button>
-    <div class="other">
-      <div class="muted small">Doing a different day?</div>
-      <div class="chips">${S.plan.map((d, i) => `<button class="chip ${i === S.next % S.plan.length ? "on" : ""}" data-a="pickDay" data-i="${i}">${esc(d.name)}</button>`).join("")}</div>
-    </div>
+  <div class="card hi">
+    <h3>Start a workout</h3>
+    <p class="sub">What are we training?</p>
+    <button class="btn filled wide big" data-a="start">${esc(day.name)} · next up</button>
+    <button class="row-link" data-a="previewDay" data-i="${ni}"><span>${esc(focusOf(day))} · ${day.items.length} lifts · ~${minutesOf(day)} min</span>${CHEV}</button>
+    <div class="grid2">${others}</div>
   </div>
+  <h2 class="section">This week</h2>
   <div class="card">
-    <div class="row between"><h3>This week</h3><span class="muted small">${thisWeek} of 6</span></div>
+    <div class="row between"><span>${thisWeek === 0 ? "No workouts yet" : thisWeek >= 6 ? "All 6 done!" : `${thisWeek} of 6 workouts`}</span><span class="muted small">Week ${(((cycleWeek() % 6) + 6) % 6) + 1} of 6</span></div>
     <div class="dots">${Array.from({ length: 6 }, (_, i) => `<span class="dot ${i < thisWeek ? "on" : ""}"></span>`).join("")}</div>
   </div>
-  <div class="card">
-    <div class="row between"><h3>Protein today</h3><button class="link" data-a="go" data-v="log">Log</button></div>
-    <div class="row gap">${ring(pg / pt, 86, 9, "var(--accent)", `<b>${pg}</b><span class="tiny muted">of ${pt} g</span>`)}
-      <div class="chips">${QUICK.slice(0, 4).map((q) => `<button class="chip" data-a="addP" data-g="${q.g}" data-l="${esc(q.label)}">+${q.g} ${esc(q.label.split(" ").slice(-1)[0])}</button>`).join("")}</div>
-    </div>
-  </div>`;
+  <h2 class="section">Protein today</h2>
+  <button class="card nav-card" data-a="go" data-v="log">
+    ${ring(pg / pt, 64, 7, "var(--accent)", `<b>${pg}</b>`)}
+    <div class="grow"><div class="t">${pg} of ${pt} g</div><div class="muted small">${pg >= pt ? "Goal hit. Nice." : "Tap to add what you've eaten"}</div></div>${CHEV}
+  </button>`;
 }
 
 function sleepCard(once) {
-  return `<div class="card">
-    <div class="row between"><h3>How did you sleep last night?</h3>${once ? '<button class="link" data-a="skipSleep">Skip</button>' : ""}</div>
+  return `<div class="card tonal">
+    <div class="row between"><h3>How did you sleep last night?</h3>${once ? '<button class="btn text" data-a="skipSleep">Skip</button>' : ""}</div>
     <div class="row between"><span class="muted">Hours</span>${stepper("sleepH", ui.sleepH ?? 7.5, "h")}</div>
     <div class="seg">${["Poor", "Okay", "Great"].map((q) => `<button class="${ui.sleepQ === q ? "on" : ""}" data-a="sleepQ" data-q="${q}">${q}</button>`).join("")}</div>
-    <button class="btn wide" data-a="saveSleep">Save</button>
+    <button class="btn filled wide" data-a="saveSleep">Save</button>
   </div>`;
 }
 
@@ -329,7 +322,7 @@ function vWorkout() {
 
   if (allDone) {
     return head + `<div class="card center">${frog(110, "flex")}<h2>That's everything!</h2><p class="muted">Nice work. Wrap it up and rate how hard it felt.</p>
-      <button class="btn primary wide" data-a="finish">Finish workout</button></div>` + upNext(c);
+      <button class="btn filled wide" data-a="finish">Finish workout</button></div>` + upNext(c);
   }
 
   const e = EX(it.ex);
@@ -366,14 +359,14 @@ function vWorkout() {
       <div><div class="lbl">Reps</div>${stepper("r", it.r, "reps")}</div>
     </div>
     ${plateTxt}
-    <button class="btn primary wide big" data-a="doneSet">Done · set ${it.done.length + 1} of ${it.sets}</button>
+    <button class="btn filled wide big" data-a="doneSet">Done · set ${it.done.length + 1} of ${it.sets}</button>
     <div class="actions">
-      <button class="btn ghost" data-a="later">Busy? Later</button>
-      <button class="btn ghost" data-a="swap">Swap</button>
-      <button class="btn ghost" data-a="addSet">+ Set</button>
-      <button class="btn ghost" data-a="skip">Skip</button>
+      <button data-a="swap"><svg viewBox="0 0 24 24"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg>Swap</button>
+      <button data-a="later"><svg viewBox="0 0 24 24"><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="8"/></svg>Later</button>
+      <button data-a="addSet"><svg viewBox="0 0 24 24"><path d="M12 6v12M6 12h12"/></svg>Set</button>
+      <button data-a="skip"><svg viewBox="0 0 24 24"><path d="M6 6l8 6-8 6zM17 6v12"/></svg>Skip</button>
     </div>
-  </div>` + upNext(c) + `<button class="btn ghost wide" data-a="finish">End workout</button>`;
+  </div>` + upNext(c) + `<button class="btn text wide danger" data-a="finish">End workout</button>`;
 }
 
 function fmtRest(s) { return s >= 60 ? (s % 60 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : `${s / 60} min`) : `${s}s`; }
@@ -382,11 +375,11 @@ function upNext(c) {
   const rows = c.items.map((it, i) => {
     if (i === c.idx && !(it.skipped || it.done.length >= it.sets)) return "";
     const done = it.done.length >= it.sets, sk = it.skipped;
-    const state = done ? `<span class="ok">✓</span>` : sk ? `<span class="muted small">skipped</span>` : `<button class="btn small" data-a="doNow" data-i="${i}">Do now</button>`;
+    const state = done ? `<span class="ok">✓</span>` : sk ? `<span class="muted small">skipped</span>` : `<button class="btn outline small" data-a="doNow" data-i="${i}">Do now</button>`;
     const prog = it.done.length && !done ? ` · ${it.done.length}/${it.sets} sets` : "";
-    return `<li class="${done || sk ? "dim" : ""}"><div><div>${esc(EX(it.ex).name)}</div><div class="muted small">${it.sets} × ${it.min}–${it.max}${prog}</div></div>${sk ? `<button class="btn small ghost" data-a="unskip" data-i="${i}">Undo</button>` : state}</li>`;
+    return `<li class="${done || sk ? "dim" : ""}"><div><div>${esc(EX(it.ex).name)}</div><div class="muted small">${it.sets} × ${it.min}–${it.max}${prog}</div></div>${sk ? `<button class="btn text small" data-a="unskip" data-i="${i}">Undo</button>` : state}</li>`;
   }).join("");
-  return `<div class="card"><h3>Up next</h3><p class="muted small">Machine taken? Tap "Do now" on anything below.</p><ul class="next">${rows}</ul></div>`;
+  return `<h2 class="section">Up next</h2><p class="hint-line">Machine taken? Do any of these now, or tap Later.</p><div class="card list"><ul class="next">${rows}</ul></div>`;
 }
 
 function sessionStats(c) {
@@ -417,31 +410,40 @@ function vSummary() {
     <h3>How hard was it overall?</h3>
     <div class="rate">${Array.from({ length: 10 }, (_, i) => `<button class="${ui.rating === i + 1 ? "on" : ""}" data-a="rate" data-r="${i + 1}">${i + 1}</button>`).join("")}</div>
     <div class="muted small center">${ui.rating ? labels[ui.rating] || (ui.rating < 5 ? "Easy" : ui.rating < 7 ? "Solid" : "Hard") : "1 is a warm-up, 10 is everything you had"}</div>
-    <button class="btn primary wide" data-a="saveWorkout">Save workout</button>
+    <button class="btn filled wide" data-a="saveWorkout">Save workout</button>
   </div>
-  <div class="row gap center-row"><button class="btn ghost small" data-a="backToWorkout">Back to workout</button><button class="btn ghost small danger" data-a="discard">Discard</button></div>`;
+  <div class="row gap center-row"><button class="btn outline small" data-a="backToWorkout">Back to workout</button><button class="btn text small danger" data-a="discard">Discard</button></div>`;
 }
 
 function vPlan() {
-  const d = S.plan[ui.planDay];
-  const items = d.items.map((it, i) => `<li>
-    <div class="grow" data-a="editItem" data-i="${i}"><div>${esc(EX(it.ex).name)}</div><div class="muted small">${it.sets} × ${it.min}–${it.max} · rest ${fmtRest(it.rest)}</div></div>
-    <div class="mv"><button class="icon-btn sm" data-a="mv" data-i="${i}" data-d="-1" ${i === 0 ? "disabled" : ""} aria-label="Move up">↑</button>
-    <button class="icon-btn sm" data-a="mv" data-i="${i}" data-d="1" ${i === d.items.length - 1 ? "disabled" : ""} aria-label="Move down">↓</button></div></li>`).join("");
+  if (ui.planOpen != null && S.plan[ui.planOpen]) return vPlanDay(ui.planOpen);
+  const ni = S.next % S.plan.length;
+  const rows = S.plan.map((d, i) => `<li><button class="list-row" data-a="openDay" data-i="${i}">
+      <span class="num ${i === ni ? "on" : ""}">${i + 1}</span>
+      <span class="grow"><span class="t">${esc(d.name)}${i === ni ? ' <span class="badge">next up</span>' : ""}</span><span class="muted small">${esc(focusOf(d))} · ${d.items.length} lifts</span></span>${CHEV}
+    </button></li>`).join("");
   const pv = planVolume();
-  return `<header class="hero simple"><h1>Plan</h1></header>
-  <p class="muted small pad">The days run in order. After ${esc(S.plan[(S.next + S.plan.length - 1) % S.plan.length].name)} comes <b>${esc(S.plan[S.next % S.plan.length].name)}</b>. Tap a lift to change it.</p>
-  <div class="chips scroll">${S.plan.map((x, i) => `<button class="chip ${i === ui.planDay ? "on" : ""}" data-a="planDay" data-i="${i}">${esc(x.name)}</button>`).join("")}</div>
-  <div class="card">
-    <div class="row between"><h2>${esc(d.name)}</h2>${d.id === S.plan[S.next % S.plan.length].id ? '<span class="pill">next up</span>' : `<button class="link" data-a="pickDay" data-i="${ui.planDay}">Make next</button>`}</div>
-    <ul class="plan">${items}</ul>
-    <div class="row gap"><button class="btn small" data-a="addEx">+ Add exercise</button><button class="btn small ghost" data-a="resetDay">Reset day</button></div>
-  </div>
-  <div class="card">
-    <h3>Sets per muscle each week</h3>
-    <p class="muted small">From your whole plan. 10 to 20 hard sets a week is the usual sweet spot for growth. Exercises that hit a muscle indirectly count as half.</p>
-    <div class="mgrid">${BM_MUSCLES.map((m) => { const v = r1(pv[m] || 0), ok = v >= 10 ? "good" : v >= 6 ? "mid" : "low"; return `<div class="mt ${ok}"><span>${m}</span><b>${v}</b></div>`; }).join("")}</div>
-  </div>`;
+  const mrows = BM_MUSCLES.map((m) => { const v = r1(pv[m] || 0), cls = v >= 10 ? "good" : v >= 6 ? "mid" : "low";
+    return `<div class="mrow"><span>${m}</span><div class="mbar"><i class="${cls}" style="width:${Math.min(100, (v / 20) * 100)}%"></i><em style="left:50%"></em></div><b>${v}</b></div>`; }).join("");
+  return `<header class="page-head"><div><h1>Plan</h1><p class="sub">Six days that run in order. Miss one and it waits for you.</p></div></header>
+  <div class="card list"><ul>${rows}</ul></div>
+  <h2 class="section">Weekly sets per muscle</h2>
+  <div class="card"><p class="muted small">10 to 20 hard sets a week is the sweet spot for growth. The line marks 10.</p>${mrows}</div>`;
+}
+
+function vPlanDay(di) {
+  const d = S.plan[di], ni = S.next % S.plan.length;
+  const rows = d.items.map((it, i) => `<li data-i="${i}">
+      <span class="handle" aria-label="Drag to reorder"><svg viewBox="0 0 24 24"><path d="M5 9h14M5 15h14"/></svg></span>
+      <button class="list-row" data-a="editItem" data-i="${i}"><span class="grow"><span class="t">${esc(EX(it.ex).name)}</span><span class="muted small">${it.sets} × ${it.min}–${it.max} reps · rest ${fmtRest(it.rest)}</span></span>${CHEV}</button>
+    </li>`).join("");
+  return `<button class="back" data-a="closeDay"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>Plan</button>
+  <header class="page-head"><div><h1>${esc(d.name)}</h1><p class="sub">${esc(focusOf(d))} · ~${minutesOf(d)} min</p></div></header>
+  <p class="hint-line">Hold <svg class="inline" viewBox="0 0 24 24"><path d="M5 9h14M5 15h14"/></svg> and drag to reorder. Tap a lift to change it.</p>
+  <div class="card list"><ul id="dragList">${rows}</ul></div>
+  <button class="btn tonal-btn wide" data-a="addEx">+ Add exercise</button>
+  ${di === ni ? "" : `<button class="btn outline wide" data-a="pickDay" data-i="${di}">Make this next up</button>`}
+  <button class="btn text wide" data-a="resetDay">Reset to the original</button>`;
 }
 
 function vProgress() {
@@ -469,7 +471,7 @@ function vProgress() {
   const weeks = Array.from({ length: 8 }, (_, i) => { const s = ws - (7 - i) * 7 * DAY, e = s + 7 * DAY; return { l: new Date(s).toLocaleDateString(undefined, { month: "numeric", day: "numeric" }), v: S.workouts.filter((w) => w.end >= s && w.end < e).length }; });
   const st = stalls();
 
-  return `<header class="hero simple"><h1>Progress</h1></header>
+  return `<header class="page-head"><h1>Progress</h1></header>
   <div class="tiles four">
     <div class="tile"><b>${thisW.length}</b><span>workouts this week</span></div>
     <div class="tile"><b>${avgRate}</b><span>avg difficulty</span></div>
@@ -502,11 +504,11 @@ function vLog() {
     const open = ui.openWorkout === wk.id;
     const sets = wk.items.reduce((a, i) => a + i.sets.length, 0);
     const detail = open ? `<div class="wdetail">${wk.items.map((i) => `<div><b>${esc(EX(i.ex).name)}</b><span class="muted"> ${i.sets.map((s) => `${fmtW(s.w)}×${s.r}`).join(", ")}</span></div>`).join("")}
-      <button class="btn small ghost danger" data-a="delWorkout" data-id="${wk.id}">Delete workout</button></div>` : "";
+      <button class="btn text small danger" data-a="delWorkout" data-id="${wk.id}">Delete workout</button></div>` : "";
     return `<li class="wk" data-a="openWorkout" data-id="${wk.id}"><div class="row between"><div><b>${esc(wk.dayName)}</b>${wk.deload ? ' <span class="pill">light</span>' : ""}<div class="muted small">${new Date(wk.end).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} · ${sets} sets</div></div>${wk.rating ? `<span class="pill">${wk.rating}/10</span>` : ""}</div>${detail}</li>`;
   }).join("");
 
-  return `<header class="hero simple"><h1>Log</h1></header>
+  return `<header class="page-head"><h1>Log</h1></header>
   <div class="card">
     <h3>Protein today</h3>
     <div class="row gap">${ring(pg / pt, 110, 11, "var(--accent)", `<b class="bignum">${pg}</b><span class="tiny muted">of ${pt} g</span>`)}
@@ -517,7 +519,7 @@ function vLog() {
   </div>
   <div class="card">
     <h3>Sleep</h3>
-    ${todaySleep ? `<p>Last night: <b>${todaySleep.h} h</b>, ${esc(todaySleep.q || "")} <button class="link" data-a="redoSleep">change</button></p>` : sleepCard().replace('<div class="card">', "<div>").replace(/<div class="row between"><h3>.*?<\/h3><\/div>/, "")}
+    ${todaySleep ? `<p>Last night: <b>${todaySleep.h} h</b>, ${esc(todaySleep.q || "")} <button class="link" data-a="redoSleep">change</button></p>` : sleepCard().replace('<div class="card tonal">', "<div>").replace(/<div class="row between"><h3>.*?<\/h3><\/div>/, "")}
     ${bars(nights, 9, 8)}
     <p class="muted small">The line marks 8 hours. Muscle is built while you sleep, so 7 to 9 hours makes a big difference.</p>
   </div>
@@ -527,7 +529,7 @@ function vLog() {
 function vSettings() {
   const inc = S.settings.inc;
   const incRow = (k, label) => `<div class="row between"><span>${label}</span><div class="seg small">${[2.5, 5, 10].map((v) => `<button class="${inc[k] === v ? "on" : ""}" data-a="inc" data-k="${k}" data-v="${v}">${v}</button>`).join("")}</div></div>`;
-  return `<header class="hero simple"><h1>Settings</h1></header>
+  return `<header class="page-head"><h1>Settings</h1></header>
   <div class="card"><h3>Body weight</h3><div class="row"><input class="big-in" data-in="bw" inputmode="decimal" value="${S.profile?.weight ?? ""}"><span class="unit">lb</span></div><p class="muted small">Sets your protein goal.</p></div>
   <div class="card"><h3>Weight jumps (lb)</h3><p class="muted small">How much to add when you move up. Use the smallest jump your gym has.</p>
     ${incRow("barbell", "Barbell")}${incRow("dumbbell", "Dumbbells")}${incRow("machine", "Machines")}${incRow("cable", "Cables")}
@@ -538,13 +540,13 @@ function vSettings() {
     <p class="muted small">The screen also flashes green. The timer only alerts while BigMike is open, so it keeps the screen awake during a workout. Your phone's silent switch can mute the beep.</p>
   </div>
   <div class="card"><h3>Lighter weeks</h3><p class="muted small">You're in week ${(((cycleWeek() % 6) + 6) % 6) + 1} of 6. Week 6 is lighter.</p>
-    <div class="row gap"><button class="btn small" data-a="deloadNow">Lighter week now</button><button class="btn small ghost" data-a="skipDeload">Restart at week 1</button></div></div>
+    <div class="row gap"><button class="btn tonal-btn small" data-a="deloadNow">Lighter week now</button><button class="btn outline small" data-a="skipDeload">Restart at week 1</button></div></div>
   <div class="card"><h3>Backup</h3>
     <p class="muted small">${S.lastBackup ? "Last backup " + new Date(S.lastBackup).toLocaleDateString() : "No backup yet"}. Save it to Files or send it to yourself.</p>
-    <div class="row gap"><button class="btn small" data-a="export">Save backup</button><label class="btn small ghost">Restore<input type="file" accept="application/json,.json" id="importFile" hidden></label></div>
+    <div class="row gap"><button class="btn tonal-btn small" data-a="export">Save backup</button><label class="btn outline small">Restore<input type="file" accept="application/json,.json" id="importFile" hidden></label></div>
   </div>
   <div class="card"><h3>About</h3><p class="muted small">BigMike v1. Your data stays on this phone; nothing is sent anywhere.</p>
-    <button class="btn small ghost danger" data-a="wipe">Erase everything</button></div>`;
+    <button class="btn text small danger" data-a="wipe">Erase everything</button></div>`;
 }
 
 // ---------------- sheets ----------------
@@ -558,7 +560,7 @@ function howtoSheet(id) {
     <h4>Do it</h4><ol>${h.steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>
     <h4>Key cue</h4><p>${esc(h.cue)}</p>
     <h4>Common mistake</h4><p>${esc(h.mistake)}</p>
-    <a class="btn wide" href="https://www.youtube.com/results?search_query=${q}" target="_blank" rel="noopener">Watch a demo</a>`);
+    <a class="btn tonal-btn wide" href="https://www.youtube.com/results?search_query=${q}" target="_blank" rel="noopener">Watch a demo</a>`);
 }
 
 function pickSheet(title, current, onPick) {
@@ -581,8 +583,8 @@ function itemSheet(i) {
     <div class="row between"><span>Fewest reps</span>${stepper("p_min", it.min, "")}</div>
     <div class="row between"><span>Most reps</span>${stepper("p_max", it.max, "")}</div>
     <div class="row between"><span>Rest</span>${stepper("p_rest", it.rest, "sec")}</div>
-    <div class="row gap wrap"><button class="btn small" data-a="howto" data-ex="${it.ex}">How to</button><button class="btn small" data-a="planSwap">Swap exercise</button><button class="btn small ghost danger" data-a="planRemove">Remove</button></div>
-    <button class="btn primary wide" data-a="closeSheet">Done</button>`);
+    <div class="row gap wrap"><button class="btn tonal-btn small" data-a="howto" data-ex="${it.ex}">How to</button><button class="btn tonal-btn small" data-a="planSwap">Swap exercise</button><button class="btn text small danger" data-a="planRemove">Remove</button></div>
+    <button class="btn filled wide" data-a="closeSheet">Done</button>`);
 }
 
 function editSetSheet(i) {
@@ -591,7 +593,7 @@ function editSetSheet(i) {
   openSheet(`<h2>Set ${i + 1}</h2>
     <div class="row between"><span>Weight</span>${stepper("es_w", s.w, "lb")}</div>
     <div class="row between"><span>Reps</span>${stepper("es_r", s.r, "")}</div>
-    <div class="row gap"><button class="btn primary" data-a="closeSheet">Save</button><button class="btn ghost danger" data-a="delSet">Delete set</button></div>`);
+    <div class="row gap"><button class="btn filled" data-a="closeSheet">Save</button><button class="btn text danger" data-a="delSet">Delete set</button></div>`);
 }
 
 // ---------------- render ----------------
@@ -648,9 +650,9 @@ function tick() {
   if (el.dataset.k !== key) {
     el.dataset.k = key;
     el.innerHTML = over
-      ? `<div class="rest-in go"><b>Go! Next set</b><button class="btn small" data-a="restSkip">OK</button></div>`
+      ? `<div class="rest-in go"><b>Go! Next set</b><button class="btn tonal-btn small" data-a="restSkip">OK</button></div>`
       : `<div class="rest-in"><div id="rring"></div><div class="grow"><div class="muted small">Rest</div><b id="rtime" class="rtime"></b></div>
-         <button class="btn small ghost" data-a="restAdd" data-s="-15">−15</button><button class="btn small ghost" data-a="restAdd" data-s="15">+15</button><button class="btn small" data-a="restSkip">Skip</button></div>`;
+         <button class="btn outline small" data-a="restAdd" data-s="-15">−15</button><button class="btn outline small" data-a="restAdd" data-s="15">+15</button><button class="btn tonal-btn small" data-a="restSkip">Skip</button></div>`;
   }
   if (!over) {
     $("#rtime").textContent = `${mm}:${ss}`;
@@ -696,7 +698,7 @@ function startWorkout(energy) {
 }
 
 const ACT = {
-  go: (d) => { view = d.v; closeSheet(); window.scrollTo(0, 0); render(); },
+  go: (d) => { if (d.v === "plan" && view === "plan") ui.planOpen = null; view = d.v; closeSheet(); window.scrollTo(0, 0); render(); },
   closeSheet: () => { closeSheet(); render(); },
   finishSetup: () => {
     const w = num($("#setupW").value);
@@ -704,7 +706,7 @@ const ACT = {
     S.profile = { weight: w, since: Date.now() };
     save();
     try { navigator.storage?.persist?.(); } catch (e) { /* ignore */ }
-    render();
+    window.scrollTo(0, 0); render();
   },
   pickDay: (d) => { S.next = +d.i; save(); render(); toast(`${S.plan[S.next].name} is next`); },
   start: () => {
@@ -841,7 +843,10 @@ const ACT = {
     if (!confirm("Delete this workout for good?")) return;
     S.workouts = S.workouts.filter((w) => w.id !== +d.id); save(); render();
   },
-  planDay: (d) => { ui.planDay = +d.i; render(); },
+  openDay: (d) => { ui.planOpen = +d.i; ui.planDay = +d.i; window.scrollTo(0, 0); render(); },
+  closeDay: () => { ui.planOpen = null; render(); },
+  startDay: (d) => { S.next = +d.i; save(); ACT.start(); },
+  previewDay: (d) => { const day = S.plan[+d.i]; openSheet(`<h2>${esc(day.name)}</h2><p class="muted">${esc(focusOf(day))} · ~${minutesOf(day)} min</p><ul class="plain">${day.items.map((it) => `<li><span>${esc(EX(it.ex).name)}</span><span class="muted">${it.sets} × ${it.min}–${it.max}</span></li>`).join("")}</ul><button class="btn filled wide" data-a="start">Start ${esc(day.name)}</button>`); },
   mv: (d) => {
     const items = S.plan[ui.planDay].items, i = +d.i, j = i + +d.d;
     if (j < 0 || j >= items.length) return;
@@ -940,6 +945,46 @@ document.addEventListener("input", (e) => {
   curItem()[k] = num(e.target.value);
 });
 document.addEventListener("focusin", (e) => { if (e.target.matches("input[inputmode]")) setTimeout(() => e.target.select?.(), 0); });
+
+// ---------------- drag to reorder (plan day) ----------------
+let drag = null;
+document.addEventListener("pointerdown", (e) => {
+  const h = e.target.closest(".handle");
+  if (!h) return;
+  const li = h.closest("li"), ul = li.parentElement;
+  e.preventDefault();
+  h.setPointerCapture?.(e.pointerId);
+  const items = [...ul.children];
+  drag = { li, items, from: items.indexOf(li), to: items.indexOf(li), y0: e.clientY, hgt: li.getBoundingClientRect().height };
+  li.classList.add("dragging");
+});
+document.addEventListener("pointermove", (e) => {
+  if (!drag) return;
+  e.preventDefault();
+  const dy = e.clientY - drag.y0;
+  drag.li.style.transform = `translateY(${dy}px)`;
+  const to = Math.max(0, Math.min(drag.items.length - 1, drag.from + Math.round(dy / drag.hgt)));
+  drag.to = to;
+  drag.items.forEach((el, i) => {
+    if (el === drag.li) return;
+    const shift = drag.from < to && i > drag.from && i <= to ? -drag.hgt : to < drag.from && i >= to && i < drag.from ? drag.hgt : 0;
+    el.style.transform = shift ? `translateY(${shift}px)` : "";
+  });
+}, { passive: false });
+function endDrag() {
+  if (!drag) return;
+  const { from, to } = drag;
+  drag = null;
+  if (from !== to) {
+    const items = S.plan[ui.planDay].items;
+    const [m] = items.splice(from, 1);
+    items.splice(to, 0, m);
+    save();
+  }
+  render();
+}
+document.addEventListener("pointerup", endDrag);
+document.addEventListener("pointercancel", endDrag);
 
 // ---------------- start ----------------
 if (S.cur?.restEnd && Date.now() > S.cur.restEnd) ui.restFired = true;

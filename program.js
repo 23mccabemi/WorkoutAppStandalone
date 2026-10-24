@@ -624,7 +624,7 @@ window.BM_DAYS = [
     E("lat_pulldown", 3, 8, 12, 120), E("cs_row", 3, 8, 12, 120), E("seated_cable_row", 2, 10, 15, 90),
     E("face_pull", 3, 12, 20, 75), E("incline_db_curl", 3, 10, 15, 75), E("cable_crunch", 3, 10, 15, 60),
   ] },
-  { id: "legs_a", name: "Legs A", sub: "Quads", items: [
+  { id: "legs_a", name: "Legs A", sub: "Quad focus", items: [
     E("hack_squat", 3, 6, 10, 150), E("rdl", 3, 8, 12, 120), E("leg_press", 3, 10, 15, 120),
     E("leg_ext", 3, 10, 15, 75), E("seated_leg_curl", 3, 10, 15, 75), E("standing_calf", 3, 10, 15, 60),
   ] },
