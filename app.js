@@ -639,6 +639,14 @@ function editSetSheet(i) {
     <div class="row gap"><button class="btn filled" data-a="closeSheet">Save</button><button class="btn text danger" data-a="delSet">Delete set</button></div>`);
 }
 
+// In-app confirm (the browser's own confirm/prompt pop-ups get blocked in some previews and webviews).
+function ask(title, text, okLabel, onOk, danger = false) {
+  ui.askOk = onOk;
+  openSheet(`<h2>${esc(title)}</h2>${text ? `<p class="muted">${esc(text)}</p>` : ""}
+    <button class="btn ${danger ? "danger-fill" : "filled"} wide" data-a="askOk">${esc(okLabel)}</button>
+    <button class="btn text wide" data-a="closeSheet">Cancel</button>`);
+}
+
 // ---------------- render ----------------
 function render() {
   const app = $("#app");
@@ -850,12 +858,19 @@ const ACT = {
   finish: () => {
     const left = S.cur.items.filter((i) => !i.skipped && i.done.length < i.sets).length;
     const any = S.cur.items.some((i) => i.done.length);
-    if (!any) { if (confirm("Nothing logged yet. Cancel this workout?")) { S.cur = null; save(); letSleep(); render(); } return; }
-    if (left && !confirm(`${left} exercise${left > 1 ? "s" : ""} not finished. End the workout anyway?`)) return;
-    S.cur.finishing = true; S.cur.restEnd = null; ui.rating = null; save(); window.scrollTo(0, 0); render();
+    const wrap = () => { closeSheet(); S.cur.finishing = true; S.cur.restEnd = null; ui.rating = null; save(); window.scrollTo(0, 0); render(); };
+    if (!any) return ask("Cancel this workout?", "Nothing's logged yet, so nothing will be saved.", "Cancel workout", () => { closeSheet(); S.cur = null; save(); letSleep(); render(); }, true);
+    if (!left) return wrap();
+    ui.endWrap = wrap;
+    openSheet(`<h2>End the workout?</h2><p class="muted">${left} lift${left > 1 ? "s" : ""} not finished yet. Everything you've done so far is kept.</p>
+      <button class="btn filled wide" data-a="endWrap">Finish and save</button>
+      <button class="btn tonal-btn wide" data-a="closeSheet">Keep going</button>
+      <button class="btn text wide danger" data-a="discard">Discard workout</button>`);
   },
   backToWorkout: () => { S.cur.finishing = false; save(); render(); },
-  discard: () => { if (confirm("Throw away this workout? It won't be saved.")) { S.cur = null; save(); letSleep(); render(); } },
+  discard: () => ask("Discard this workout?", "None of it will be saved.", "Discard", () => { closeSheet(); S.cur = null; save(); letSleep(); view = "today"; render(); }, true),
+  endWrap: () => ui.endWrap?.(),
+  askOk: () => { const f = ui.askOk; ui.askOk = null; f?.(); },
   rate: (d) => { ui.rating = +d.r; render(); },
   saveWorkout: () => {
     if (!ui.rating) return toast("Tap a number for how hard it felt");
@@ -881,15 +896,20 @@ const ACT = {
   redoSleep: () => { const s = S.sleep[ymd()]; ui.sleepH = s?.h; ui.sleepQ = s?.q; delete S.sleep[ymd()]; save(); render(); },
   addP: (d) => { (S.protein[ymd()] ||= []).push({ g: +d.g, label: d.l, t: Date.now() }); save(); render(); toast(`+${d.g} g protein`); },
   customP: () => {
-    const v = num(prompt("Grams of protein (check the label):"));
-    if (!v || v <= 0 || v > 200) return;
-    (S.protein[ymd()] ||= []).push({ g: Math.round(v), label: "Other", t: Date.now() }); save(); render();
+    openSheet(`<h2>Add protein</h2><p class="muted">Check the label for grams of protein.</p>
+      <div class="row"><input id="customG" class="big-in" inputmode="numeric" placeholder="e.g. 30"><span class="unit">g</span></div>
+      <button class="btn filled wide" data-a="saveCustomP">Add</button>`);
+    setTimeout(() => $("#customG")?.focus(), 250);
+  },
+  saveCustomP: () => {
+    const v = num($("#customG")?.value);
+    if (!v || v <= 0 || v > 200) return toast("Enter grams between 1 and 200");
+    (S.protein[ymd()] ||= []).push({ g: Math.round(v), label: "Other", t: Date.now() }); save(); closeSheet(); render(); toast(`+${Math.round(v)} g protein`);
   },
   delP: (d) => { S.protein[ymd()].splice(+d.i, 1); save(); render(); },
   openWorkout: (d) => { ui.openWorkout = ui.openWorkout === +d.id ? null : +d.id; render(); },
   delWorkout: (d) => {
-    if (!confirm("Delete this workout for good?")) return;
-    S.workouts = S.workouts.filter((w) => w.id !== +d.id); save(); render();
+    ask("Delete this workout?", "It's removed for good, along with its sets.", "Delete", () => { S.workouts = S.workouts.filter((w) => w.id !== +d.id); save(); closeSheet(); render(); }, true);
   },
   openDay: (d) => { ui.planOpen = +d.i; ui.planDay = +d.i; window.scrollTo(0, 0); render(); },
   closeDay: () => { ui.planOpen = null; render(); },
@@ -913,7 +933,7 @@ const ACT = {
   }),
   resetDay: () => {
     const d = S.plan[ui.planDay], orig = BM_DAYS.find((x) => x.id === d.id);
-    if (orig && confirm(`Put ${d.name} back to the original plan?`)) { S.plan[ui.planDay] = clone(orig); save(); render(); }
+    if (orig) ask(`Reset ${d.name}?`, "It goes back to the original lifts, order, sets and reps.", "Reset", () => { S.plan[ui.planDay] = clone(orig); save(); closeSheet(); render(); }, true);
   },
   chartEx: (d) => { ui.chartEx = d.ex; render(); },
   inc: (d) => { S.settings.inc[d.k] = +d.v; save(); render(); },
@@ -936,9 +956,7 @@ const ACT = {
     } catch (e) { if (e?.name !== "AbortError") toast("Couldn't save the backup"); }
   },
   wipe: () => {
-    if (!confirm("Erase all workouts, logs and settings? This can't be undone.")) return;
-    if (!confirm("Really erase everything?")) return;
-    S = fresh(); save(); view = "today"; render();
+    ask("Erase everything?", "All workouts, logs and settings on this phone. This can't be undone.", "Erase everything", () => { S = fresh(); save(); closeSheet(); view = "today"; render(); }, true);
   },
 };
 
@@ -964,8 +982,7 @@ document.addEventListener("change", (e) => {
       try {
         const d = JSON.parse(fr.result);
         if (!d || !d.v || !Array.isArray(d.workouts)) throw new Error("bad");
-        if (!confirm(`Restore this backup with ${d.workouts.length} workouts? It replaces what's on this phone.`)) return;
-        S = Object.assign(fresh(), d); save(); view = "today"; render(); toast("Backup restored");
+        ask("Restore this backup?", `It has ${d.workouts.length} workouts and replaces what's on this phone.`, "Restore", () => { S = Object.assign(fresh(), d); save(); closeSheet(); view = "today"; render(); toast("Backup restored"); });
       } catch (err) { toast("That file isn't a BigMike backup"); }
     };
     fr.readAsText(t.files[0]);
