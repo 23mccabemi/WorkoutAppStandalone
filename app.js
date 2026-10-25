@@ -234,8 +234,14 @@ function toast(msg) {
 }
 
 function openSheet(html) {
-  $("#sheet").innerHTML = `<div class="sheet-back" data-a="closeSheet"></div><div class="sheet-card"><div class="grab"></div><button class="sheet-x" data-a="closeSheet" aria-label="Close">×</button>${html}</div>`;
-  $("#sheet").classList.add("open");
+  const sh = $("#sheet"), card = sh.querySelector(".sheet-card");
+  // Already open: swap the contents in place (no slide-up again, scroll position kept).
+  if (sh.classList.contains("open") && card) {
+    card.innerHTML = `<div class="grab"></div><button class="sheet-x" data-a="closeSheet" aria-label="Close">×</button>${html}`;
+    return;
+  }
+  sh.innerHTML = `<div class="sheet-back" data-a="closeSheet"></div><div class="sheet-card"><div class="grab"></div><button class="sheet-x" data-a="closeSheet" aria-label="Close">×</button>${html}</div>`;
+  sh.classList.add("open");
 }
 function closeSheet() { $("#sheet").classList.remove("open"); $("#sheet").innerHTML = ""; ui.pick = null; }
 
@@ -317,6 +323,15 @@ function sleepCard(once) {
 // ---- workout: one focused screen at a time (set, then rest), like Clyde's gym pop-up ----
 const pending = (it) => !it.skipped && it.done.length < it.sets;
 function firstPending() { return S.cur.items.findIndex(pending); }
+/** Keeps the lift on screen at the top of the queue, so "now" always means the same lift. */
+function normalizeOrder() {
+  const c = S.cur;
+  if (!c) return;
+  const it = c.items[c.idx];
+  if (!it || !pending(it)) { c.idx = firstPending(); return; }
+  const fp = firstPending();
+  if (fp >= 0 && fp !== c.idx) { c.items.splice(c.idx, 1); c.items.splice(fp, 0, it); c.idx = fp; }
+}
 function aimText(it) {
   const e = EX(it.ex), w = num(it.w);
   const wTxt = w == null ? "Pick a weight" : e.assisted ? `${fmtW(w)} lb assist` : e.equip === "bodyweight" && !w ? "Bodyweight" : `${fmtW(w)} lb${e.equip === "dumbbell" ? " each" : ""}`;
@@ -346,7 +361,7 @@ function vWorkout() {
     return wkTop(c) + `<div class="focus center">${frog(130, "flex")}<h1>That's everything!</h1><p class="sub">Nice work. Wrap it up and rate how hard it felt.</p>
       <button class="btn filled wide big" data-a="finish">Finish workout</button></div>`;
   }
-  if (!pending(c.items[c.idx])) c.idx = firstPending();
+  normalizeOrder();
   if (c.restEnd) return vRest(c);
   const it = c.items[c.idx], e = EX(it.ex), sg = it.sg || {};
   let hint = "";
@@ -411,6 +426,7 @@ function vRest(c) {
 
 function queueSheet() {
   const c = S.cur;
+  normalizeOrder();
   const cur = firstPending();
   const pend = c.items.map((it, i) => ({ it, i })).filter((x) => pending(x.it));
   const gone = c.items.map((it, i) => ({ it, i })).filter((x) => !pending(x.it));
@@ -743,7 +759,7 @@ function startWorkout(energy) {
 }
 
 const ACT = {
-  go: (d) => { if (d.v === "plan" && view === "plan") ui.planOpen = null; view = d.v; closeSheet(); window.scrollTo(0, 0); render(); },
+  go: (d) => { if (d.v === "plan") ui.planOpen = null; view = d.v; closeSheet(); window.scrollTo(0, 0); render(); },
   closeSheet: () => { closeSheet(); render(); },
   finishSetup: () => {
     const w = num($("#setupW").value);
@@ -1051,7 +1067,6 @@ function endDrag() {
     if (from !== to) { const [m] = pend.splice(from, 1); pend.splice(to, 0, m); }
     c.items = gone.concat(pend);
     c.idx = c.items.findIndex(pending);
-    if (from !== to) c.restEnd = c.restEnd; // keep resting; the next set is now the new top lift
     save(); render(); queueSheet();
     return;
   }
