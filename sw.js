@@ -1,6 +1,6 @@
 // Offline support: serve the app from the cache, and fetch a fresh copy in the background
 // so updates show up the next time BigMike is opened.
-const CACHE = "bigmike-v3";
+const CACHE = "bigmike-v4";
 const FILES = ["./", "index.html", "app.js", "program.js", "manifest.webmanifest", "icons/icon-180.png", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {

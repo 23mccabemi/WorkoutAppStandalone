@@ -309,78 +309,121 @@ function sleepCard(once) {
   </div>`;
 }
 
+// ---- workout: one focused screen at a time (set, then rest), like Clyde's gym pop-up ----
+const pending = (it) => !it.skipped && it.done.length < it.sets;
+function firstPending() { return S.cur.items.findIndex(pending); }
+function aimText(it) {
+  const e = EX(it.ex), w = num(it.w);
+  const wTxt = w == null ? "Pick a weight" : e.assisted ? `${fmtW(w)} lb assist` : e.equip === "bodyweight" && !w ? "Bodyweight" : `${fmtW(w)} lb${e.equip === "dumbbell" ? " each" : ""}`;
+  return `${wTxt} × ${it.r ?? it.max}`;
+}
+function lastText(it) {
+  const L = it.sg?.last;
+  return L ? "Last time: " + L.sets.map((s) => `${fmtW(s.w)}×${s.r}`).join(", ") : null;
+}
+function nextBlip(c) {
+  const rest = c.items.filter((it, i) => i !== c.idx && pending(it));
+  if (!rest.length) return `<button class="blip" data-a="queue"><span class="muted">Last lift of the day</span>${CHEV}</button>`;
+  return `<button class="blip" data-a="queue"><span><span class="muted">Up next:</span> ${esc(EX(rest[0].ex).name)}${rest.length > 1 ? `<span class="muted"> +${rest.length - 1}</span>` : ""}</span>${CHEV}</button>`;
+}
+function wkTop(c, label) {
+  const done = c.items.filter((i) => !pending(i)).length;
+  return `<div class="wk-top">
+    <button class="btn text small danger" data-a="finish">End</button>
+    <div class="wk-title"><b>${esc(c.dayName)}</b><span>${label || `${done} of ${c.items.length} lifts done`}</span></div>
+    <button class="btn text small" data-a="queue"><svg class="ico" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg>Queue</button>
+  </div>`;
+}
+
 function vWorkout() {
   const c = S.cur;
-  const it = c.items[c.idx];
-  const allDone = c.items.every((i) => i.skipped || i.done.length >= i.sets);
-  const elapsed = Math.floor((Date.now() - c.start) / 60000);
-  const head = `<header class="wk-head">
-    <div><div class="muted small">${esc(c.dayName)}${c.deload ? " · lighter week" : c.energy === "low" ? " · easy day" : ""}</div>
-    <h1>${c.items.filter((i) => i.done.length >= i.sets).length} of ${c.items.length} done</h1></div>
-    <span class="pill" id="elapsed">${elapsed} min</span></header>
-    <div id="rest" class="rest" hidden></div>`;
-
-  if (allDone) {
-    return head + `<div class="card center">${frog(110, "flex")}<h2>That's everything!</h2><p class="muted">Nice work. Wrap it up and rate how hard it felt.</p>
-      <button class="btn filled wide" data-a="finish">Finish workout</button></div>` + upNext(c);
+  if (firstPending() < 0) {
+    return wkTop(c) + `<div class="focus center">${frog(130, "flex")}<h1>That's everything!</h1><p class="sub">Nice work. Wrap it up and rate how hard it felt.</p>
+      <button class="btn filled wide big" data-a="finish">Finish workout</button></div>`;
   }
-
-  const e = EX(it.ex);
-  const sg = it.sg || {};
-  const lastTxt = sg.last ? sg.last.sets.map((s) => `${fmtW(s.w)}×${s.r}`).join(", ") : null;
+  if (!pending(c.items[c.idx])) c.idx = firstPending();
+  if (c.restEnd) return vRest(c);
+  const it = c.items[c.idx], e = EX(it.ex), sg = it.sg || {};
   let hint = "";
-  if (c.deload) hint = "Lighter week: same weight as usual, stop with 3 or more reps left in the tank.";
-  else if (sg.kind === "first") hint = e.equip === "bodyweight" ? "Log 0 lb, or the plate you hold." : `First time: pick a weight you could do about ${it.max} times with good form. I'll learn from what you log.`;
-  else if (sg.kind === "up") hint = `${e.assisted ? "Less assist" : "Up " + incOf(it.ex) + " lb"} today: you hit ${it.max} on every set last time.`;
-  else if (sg.kind === "down") hint = `${e.assisted ? "More assist" : "A little lighter"} today so you land in the ${it.min}–${it.max} range.`;
-  else hint = `Beat last time's reps. Hit ${it.max} on every set and the weight goes up.`;
-  if (it.bumped && !c.deload) hint = `That set was strong, so ${e.assisted ? "the assist dropped" : "the weight went up"} for the rest.`;
-
-  const setsRow = Array.from({ length: it.sets }, (_, i) => {
-    const d = it.done[i];
-    if (d) return `<button class="set done" data-a="editSet" data-i="${i}">${fmtW(d.w)}×${d.r}</button>`;
-    return `<span class="set ${i === it.done.length ? "now" : ""}">Set ${i + 1}</span>`;
-  }).join("");
-
+  if (c.deload) hint = "Lighter week: stop with 3 or more reps left in the tank.";
+  else if (it.bumped) hint = `Strong set, so ${e.assisted ? "the assist dropped" : "the weight went up"} for the rest.`;
+  else if (sg.kind === "first") hint = e.equip === "bodyweight" ? "Log 0, or the plate you hold." : `First time: pick a weight you could do about ${it.max} times with good form.`;
+  else if (sg.kind === "up") hint = `You hit ${it.max} on every set last time, so ${e.assisted ? "less assist" : "it's up " + incOf(it.ex) + " lb"}.`;
+  else if (sg.kind === "down") hint = `${e.assisted ? "More assist" : "A bit lighter"} so you land in the range.`;
+  const last = lastText(it);
   const wu = it.done.length === 0 ? warmups(it) : [];
-  const wuRow = wu.length ? `<div class="warm"><span class="muted small">Warm-up first:</span> ${wu.map((s, i) => `<button class="chip tiny ${it.wu?.[i] ? "on" : ""}" data-a="wu" data-i="${i}">${fmtW(s.w)}×${s.r}</button>`).join("")}</div>` : "";
-  const plateTxt = e.equip === "barbell" && num(it.w) ? `<div class="muted small center">${plates(num(it.w))} (${S.settings.bar} lb bar)</div>` : "";
   const wLabel = e.assisted ? "lb assist" : e.equip === "dumbbell" ? "lb each" : "lb";
+  const plate = e.equip === "barbell" && num(it.w) ? `<div class="muted small center">${plates(num(it.w))}</div>` : "";
+  const doneRow = it.done.length ? `<div class="donesets">${it.done.map((s, i) => `<button data-a="editSet" data-i="${i}">✓ ${fmtW(s.w)}×${s.r}</button>`).join("")}</div>` : "";
+  const h = e.howto;
+  const how = h ? `<div class="howto ${ui.howOpen ? "open" : ""}">
+      <button class="how-head" data-a="toggleHow"><span>How to do it</span><svg class="chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+      ${ui.howOpen ? `<div class="how-body"><p><b>Setup.</b> ${esc(h.setup)}</p><ol>${h.steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>
+        <p><b>Key cue.</b> ${esc(h.cue)}</p><p><b>Avoid.</b> ${esc(h.mistake)}</p>
+        <a class="btn text small" href="https://www.youtube.com/results?search_query=${encodeURIComponent(e.name + " proper form")}" target="_blank" rel="noopener">Watch a demo ↗</a></div>` : ""}
+    </div>` : "";
 
-  return head + `<div class="card ex">
-    <div class="row between top"><div><h2>${esc(e.name)}</h2><div class="muted small">${it.sets} sets × ${it.min}–${it.max} reps · rest ${fmtRest(it.rest)}</div></div>
-      <button class="icon-btn" data-a="howto" data-ex="${it.ex}" aria-label="How to do it">?</button></div>
-    ${lastTxt ? `<div class="last">Last time: <b>${lastTxt}</b></div>` : ""}
-    <div class="hint">${hint}</div>
-    ${wuRow}
-    <div class="sets">${setsRow}</div>
-    <div class="inputs">
+  return wkTop(c) + `<div class="focus">
+    <div class="eyebrow-set">Set ${it.done.length + 1} of ${it.sets}</div>
+    <h1 class="exname">${esc(e.name)}</h1>
+    <div class="range">${it.min}–${it.max} reps · rest ${fmtRest(it.rest)} after</div>
+    ${last ? `<div class="lastline">${last}</div>` : ""}
+    ${hint ? `<div class="hint">${hint}</div>` : ""}
+    ${wu.length ? `<div class="warm"><span class="muted small">Warm up:</span> ${wu.map((s, i) => `<button class="chip tiny ${it.wu?.[i] ? "on" : ""}" data-a="wu" data-i="${i}">${fmtW(s.w)}×${s.r}</button>`).join("")}</div>` : ""}
+    <div class="big-inputs">
       <div><div class="lbl">Weight</div>${stepper("w", it.w, wLabel)}</div>
       <div><div class="lbl">Reps</div>${stepper("r", it.r, "reps")}</div>
     </div>
-    ${plateTxt}
-    <button class="btn filled wide big" data-a="doneSet">Done · set ${it.done.length + 1} of ${it.sets}</button>
-    <div class="actions">
-      <button data-a="swap"><svg viewBox="0 0 24 24"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg>Swap</button>
-      <button data-a="later"><svg viewBox="0 0 24 24"><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="8"/></svg>Later</button>
-      <button data-a="addSet"><svg viewBox="0 0 24 24"><path d="M12 6v12M6 12h12"/></svg>Set</button>
-      <button data-a="skip"><svg viewBox="0 0 24 24"><path d="M6 6l8 6-8 6zM17 6v12"/></svg>Skip</button>
+    ${plate}
+    <button class="btn filled wide huge" data-a="doneSet">Set done ✓</button>
+    ${doneRow}
+    <div class="row3">
+      <button class="btn tonal-btn" data-a="skipSet">Skip set</button>
+      <button class="btn tonal-btn" data-a="skip">Skip lift</button>
+      <button class="btn tonal-btn" data-a="swap">Swap</button>
     </div>
-  </div>` + upNext(c) + `<button class="btn text wide danger" data-a="finish">End workout</button>`;
+    ${how}
+    ${nextBlip(c)}
+  </div>`;
+}
+
+function vRest(c) {
+  const it = c.items[c.idx];
+  const left = Math.ceil((c.restEnd - Date.now()) / 1000);
+  const over = left <= 0;
+  const last = lastText(it);
+  return wkTop(c, "Resting") + `<div class="focus center rest-page ${over ? "over" : ""}">
+    <div class="eyebrow-set">${over ? "Time's up" : "Rest"}</div>
+    <div id="bigring" class="bigring"></div>
+    <div class="next-up"><span class="muted">Next:</span> ${esc(EX(it.ex).name)}<br><span class="muted">set ${it.done.length + 1} of ${it.sets}</span></div>
+    <div class="aim">${aimText(it)}</div>
+    ${last ? `<div class="lastline">${last}</div>` : ""}
+    ${over ? `<button class="btn filled wide huge" data-a="restSkip">Start set ${it.done.length + 1}</button>`
+      : `<div class="row3"><button class="btn tonal-btn" data-a="restAdd" data-s="-15">−15s</button><button class="btn tonal-btn" data-a="restAdd" data-s="30">+30s</button><button class="btn filled" data-a="restSkip">Skip rest</button></div>`}
+    ${nextBlip(c)}
+  </div>`;
+}
+
+function queueSheet() {
+  const c = S.cur;
+  const cur = firstPending();
+  const pend = c.items.map((it, i) => ({ it, i })).filter((x) => pending(x.it));
+  const gone = c.items.map((it, i) => ({ it, i })).filter((x) => !pending(x.it));
+  const row = ({ it, i }) => `<li data-i="${i}">
+      <span class="handle" aria-label="Drag to reorder"><svg viewBox="0 0 24 24"><path d="M5 9h14M5 15h14"/></svg></span>
+      <div class="list-row"><span class="grow"><span class="t">${esc(EX(it.ex).name)}${i === cur ? ' <span class="badge">now</span>' : ""}</span>
+        <span class="muted small">${it.done.length ? `${it.done.length} of ${it.sets} sets done` : `${it.sets} × ${it.min}–${it.max}`}</span></span>
+        ${i === cur ? "" : `<button class="btn outline small" data-a="doNow" data-i="${i}">Do now</button>`}
+        <button class="icon-btn sm" data-a="qSwap" data-i="${i}" aria-label="Swap"><svg class="ico" viewBox="0 0 24 24"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg></button>
+      </div></li>`;
+  openSheet(`<h2>Workout queue</h2>
+    <p class="muted small">Drag <svg class="inline" viewBox="0 0 24 24"><path d="M5 9h14M5 15h14"/></svg> to change the order. The top one is what you do now.</p>
+    <div class="card list inset"><ul id="queueList">${pend.map(row).join("")}</ul></div>
+    ${gone.length ? `<h4>Done</h4><ul class="plain">${gone.map(({ it, i }) => `<li><span>${it.skipped ? "" : "✓ "}${esc(EX(it.ex).name)}</span>${it.skipped ? `<button class="btn text small" data-a="unskip" data-i="${i}">Skipped · undo</button>` : `<span class="muted">${it.done.map((s) => `${fmtW(s.w)}×${s.r}`).join(", ")}</span>`}</li>`).join("")}</ul>` : ""}
+    <button class="btn filled wide" data-a="closeSheet">Back to lifting</button>`);
 }
 
 function fmtRest(s) { return s >= 60 ? (s % 60 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : `${s / 60} min`) : `${s}s`; }
-
-function upNext(c) {
-  const rows = c.items.map((it, i) => {
-    if (i === c.idx && !(it.skipped || it.done.length >= it.sets)) return "";
-    const done = it.done.length >= it.sets, sk = it.skipped;
-    const state = done ? `<span class="ok">✓</span>` : sk ? `<span class="muted small">skipped</span>` : `<button class="btn outline small" data-a="doNow" data-i="${i}">Do now</button>`;
-    const prog = it.done.length && !done ? ` · ${it.done.length}/${it.sets} sets` : "";
-    return `<li class="${done || sk ? "dim" : ""}"><div><div>${esc(EX(it.ex).name)}</div><div class="muted small">${it.sets} × ${it.min}–${it.max}${prog}</div></div>${sk ? `<button class="btn text small" data-a="unskip" data-i="${i}">Undo</button>` : state}</li>`;
-  }).join("");
-  return `<h2 class="section">Up next</h2><p class="hint-line">Machine taken? Do any of these now, or tap Later.</p><div class="card list"><ul class="next">${rows}</ul></div>`;
-}
 
 function sessionStats(c) {
   let sets = 0, vol = 0;
@@ -602,7 +645,9 @@ function render() {
   const html = view === "today" ? vToday() : view === "plan" ? vPlan() : view === "progress" ? vProgress() : view === "log" ? vLog() : vSettings();
   app.innerHTML = html;
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("on", t.dataset.v === view));
-  $("#tabs").hidden = !S.profile;
+  const focus = view === "today" && S.cur && !S.cur.finishing;
+  $("#tabs").hidden = !S.profile || !!focus;
+  document.body.classList.toggle("focus-mode", !!focus);
   tick();
 }
 
@@ -634,30 +679,17 @@ function restDone() {
 function startRest(sec) { S.cur.restEnd = Date.now() + sec * 1000; S.cur.restTotal = sec; ui.restFired = false; }
 
 function tick() {
-  const el = $("#rest"), c = S.cur;
-  const elp = $("#elapsed");
-  if (elp && c) elp.textContent = Math.floor((Date.now() - c.start) / 60000) + " min";
-  if (!el) return;
-  if (!c || !c.restEnd) { el.hidden = true; return; }
+  const c = S.cur;
+  if (!c || !c.restEnd || view !== "today" || c.finishing) return;
   const left = Math.ceil((c.restEnd - Date.now()) / 1000);
-  if (left <= -45) { c.restEnd = null; save(); el.hidden = true; return; }
-  el.hidden = false;
+  if (left <= -60) { c.restEnd = null; save(); render(); return; }
   const over = left <= 0;
-  if (over && !ui.restFired) { ui.restFired = true; restDone(); }
+  if (over && !ui.restFired) { ui.restFired = true; restDone(); render(); return; }
+  const el = $("#bigring");
+  if (!el) return;
   const frac = over ? 1 : 1 - left / (c.restTotal || 90);
   const mm = Math.floor(Math.max(0, left) / 60), ss = String(Math.max(0, left) % 60).padStart(2, "0");
-  const key = over ? "over" : "run";
-  if (el.dataset.k !== key) {
-    el.dataset.k = key;
-    el.innerHTML = over
-      ? `<div class="rest-in go"><b>Go! Next set</b><button class="btn tonal-btn small" data-a="restSkip">OK</button></div>`
-      : `<div class="rest-in"><div id="rring"></div><div class="grow"><div class="muted small">Rest</div><b id="rtime" class="rtime"></b></div>
-         <button class="btn outline small" data-a="restAdd" data-s="-15">−15</button><button class="btn outline small" data-a="restAdd" data-s="15">+15</button><button class="btn tonal-btn small" data-a="restSkip">Skip</button></div>`;
-  }
-  if (!over) {
-    $("#rtime").textContent = `${mm}:${ss}`;
-    $("#rring").innerHTML = ring(frac, 44, 5, "var(--accent)");
-  }
+  el.innerHTML = ring(frac, 230, 14, over ? "var(--warn)" : "var(--accent)", `<b class="rtime">${mm}:${ss}</b>`);
 }
 setInterval(tick, 250);
 
@@ -754,7 +786,7 @@ const ACT = {
     } else {
       const n = nextIndex();
       if (n >= 0) {
-        c.idx = n;
+        c.idx = n; ui.howOpen = false;
         const nx = c.items[n];
         startRest(it.rest);
         note = `Next: ${EX(nx.ex).name}`;
@@ -763,12 +795,21 @@ const ACT = {
     save(); render();
     if (note) toast(note);
   },
+  skipSet: () => {
+    const it = curItem();
+    it.sets = Math.max(it.done.length, it.sets - 1);
+    if (!pending(it)) { const n = firstPending(); if (n >= 0) S.cur.idx = n; }
+    save(); render(); toast("Set skipped");
+  },
+  toggleHow: () => { ui.howOpen = !ui.howOpen; render(); },
+  queue: () => queueSheet(),
+  qSwap: (d) => { S.cur.idx = +d.i; ACT.swap(); },
   wu: (d) => { const it = curItem(); it.wu = it.wu || []; it.wu[+d.i] = !it.wu[+d.i]; save(); render(); },
   editSet: (d) => editSetSheet(+d.i),
   delSet: () => { curItem().done.splice(ui.editSet, 1); save(); closeSheet(); render(); },
   addSet: () => { curItem().sets++; save(); render(); },
   skip: () => { curItem().skipped = true; advance(); S.cur.restEnd = null; save(); render(); },
-  unskip: (d) => { S.cur.items[+d.i].skipped = false; save(); render(); },
+  unskip: (d) => { S.cur.items[+d.i].skipped = false; save(); render(); if ($('#sheet').classList.contains('open')) queueSheet(); },
   later: () => {
     const c = S.cur, it = curItem();
     if (nextIndex() < 0) return toast("This is the last one left");
@@ -776,7 +817,14 @@ const ACT = {
     c.idx = 0; const n = c.items.findIndex((x) => !x.skipped && x.done.length < x.sets); c.idx = n < 0 ? 0 : n;
     save(); render(); toast(`${EX(it.ex).name} moved to the end`);
   },
-  doNow: (d) => { S.cur.idx = +d.i; save(); window.scrollTo({ top: 0, behavior: "smooth" }); render(); },
+  doNow: (d) => {
+    const c = S.cur, i = +d.i, it = c.items[i];
+    c.items.splice(i, 1);
+    const at = c.items.findIndex(pending);
+    c.items.splice(at < 0 ? c.items.length : at, 0, it);
+    c.idx = c.items.indexOf(it); c.restEnd = null; ui.howOpen = false;
+    save(); closeSheet(); window.scrollTo(0, 0); render(); toast(`Now: ${EX(it.ex).name}`);
+  },
   swap: () => {
     const it = curItem();
     pickSheet("Swap for", it.ex, (id) => {
@@ -955,7 +1003,7 @@ document.addEventListener("pointerdown", (e) => {
   e.preventDefault();
   h.setPointerCapture?.(e.pointerId);
   const items = [...ul.children];
-  drag = { li, items, from: items.indexOf(li), to: items.indexOf(li), y0: e.clientY, hgt: li.getBoundingClientRect().height };
+  drag = { li, ul, items, from: items.indexOf(li), to: items.indexOf(li), y0: e.clientY, hgt: li.getBoundingClientRect().height };
   li.classList.add("dragging");
 });
 document.addEventListener("pointermove", (e) => {
@@ -973,8 +1021,18 @@ document.addEventListener("pointermove", (e) => {
 }, { passive: false });
 function endDrag() {
   if (!drag) return;
-  const { from, to } = drag;
+  const { from, to, ul } = drag;
   drag = null;
+  if (ul.id === "queueList") {
+    const c = S.cur;
+    const pend = c.items.filter(pending), gone = c.items.filter((x) => !pending(x));
+    if (from !== to) { const [m] = pend.splice(from, 1); pend.splice(to, 0, m); }
+    c.items = gone.concat(pend);
+    c.idx = c.items.findIndex(pending);
+    if (from !== to) c.restEnd = c.restEnd; // keep resting; the next set is now the new top lift
+    save(); render(); queueSheet();
+    return;
+  }
   if (from !== to) {
     const items = S.plan[ui.planDay].items;
     const [m] = items.splice(from, 1);
