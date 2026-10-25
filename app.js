@@ -846,7 +846,7 @@ const ACT = {
   pick: (d) => { const f = ui.pick; if (f) f(d.ex); },
   howto: (d) => howtoSheet(d.ex),
   restAdd: (d) => { if (S.cur?.restEnd) { S.cur.restEnd += +d.s * 1000; S.cur.restTotal = Math.max(15, S.cur.restTotal + +d.s); save(); } },
-  restSkip: () => { if (S.cur) { S.cur.restEnd = null; save(); tick(); } },
+  restSkip: () => { if (S.cur) { S.cur.restEnd = null; ui.restFired = true; save(); render(); } },
   finish: () => {
     const left = S.cur.items.filter((i) => !i.skipped && i.done.length < i.sets).length;
     const any = S.cur.items.some((i) => i.done.length);
