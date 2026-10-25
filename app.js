@@ -35,6 +35,11 @@ if (!S || !S.v) S = fresh();
   S.settings = Object.assign(fresh().settings, S.settings);
   S.settings.inc = Object.assign(fresh().settings.inc, S.settings.inc);
 }
+// One-time update: cable crunches became the ab crunch machine by default.
+if (!S.machineCrunch) {
+  S.plan.forEach((d) => d.items.forEach((i) => { if (i.ex === "cable_crunch") i.ex = "ab_crunch_machine"; }));
+  S.machineCrunch = true;
+}
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { toast("Couldn't save. Phone storage may be full."); }
 }
