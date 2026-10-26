@@ -53,6 +53,8 @@ const step = (w, id, dir = 1) => {
   const e = EX(id), inc = incOf(id);
   return e.assisted ? Math.max(0, w - inc * dir) : Math.max(0, w + inc * dir);
 };
+/** Extra reps are a signal: one step up, or two when a set went 5+ past the top of the range. */
+const jumps = (over) => (over >= 5 ? 2 : 1);
 
 /** The most recent normal (not deload) session of this exercise. */
 function lastSession(ex) {
@@ -71,8 +73,14 @@ function suggest(it) {
   if (!L) return { w: e.equip === "bodyweight" ? 0 : null, r: it.max, kind: "first" };
   const lw = L.sets[L.sets.length - 1].w;
   const atW = L.sets.filter((s) => s.w === lw);
-  // Every set at or above the top of the range (an early jump mid-workout counts too).
-  if (L.sets.length >= it.sets && L.sets.every((s) => s.r >= it.max)) return { w: step(lw, it.ex), r: it.min, kind: "up", last: L };
+  // Up when every set reached the top of the range (an early jump mid-workout counts too), or when
+  // a set at the last weight went 2+ reps past it because there were reps left in the tank.
+  const over = Math.max(...atW.map((s) => s.r)) - it.max;
+  const allTop = L.sets.length >= it.sets && L.sets.every((s) => s.r >= it.max);
+  if (allTop || over >= 2) {
+    const n = jumps(over);
+    return { w: step(lw, it.ex, n), r: it.min, kind: "up", last: L, steps: n, why: over >= 2 ? "over" : "all", best: over + it.max };
+  }
   const minR = Math.min(...atW.map((s) => s.r));
   if (atW.every((s) => s.r < it.min - 1) && lw > 0) return { w: step(lw, it.ex, -1), r: it.min, kind: "down", last: L };
   return { w: lw, r: Math.min(it.max, Math.max(it.min, minR + 1)), kind: "same", last: L };
@@ -368,7 +376,8 @@ function vWorkout() {
   if (c.deload) hint = "Lighter week: stop with 3 or more reps left in the tank.";
   else if (it.bumped) hint = `Strong set, so ${e.assisted ? "the assist dropped" : "the weight went up"} for the rest.`;
   else if (sg.kind === "first") hint = e.equip === "bodyweight" ? "Log 0, or the plate you hold." : `First time: pick a weight you could do about ${it.max} times with good form.`;
-  else if (sg.kind === "up") hint = `You hit ${it.max} on every set last time, so ${e.assisted ? "less assist" : "it's up " + incOf(it.ex) + " lb"}.`;
+  else if (sg.kind === "up") hint = (sg.why === "over" ? `You got ${sg.best} reps last time, past the top of the range` : `You hit ${it.max} on every set last time`) +
+    `, so ${e.assisted ? "less assist" : "it's up " + incOf(it.ex) * (sg.steps || 1) + " lb"}.`;
   else if (sg.kind === "down") hint = `${e.assisted ? "More assist" : "A bit lighter"} so you land in the range.`;
   const last = lastText(it);
   const wu = it.done.length === 0 ? warmups(it) : [];
@@ -387,6 +396,7 @@ function vWorkout() {
     <div class="eyebrow-set">Set ${it.done.length + 1} of ${it.sets}</div>
     <h1 class="exname">${esc(e.name)}</h1>
     <div class="range">${it.min}–${it.max} reps · rest ${fmtRest(it.rest)} after</div>
+    <div class="rir">Stop with 1 to 2 reps left. More in the tank? Keep going and log every rep: extra reps move the weight up.</div>
     ${last ? `<div class="lastline">${last}</div>` : ""}
     ${hint ? `<div class="hint">${hint}</div>` : ""}
     ${wu.length ? `<div class="warm"><span class="muted small">Warm up:</span> ${wu.map((s, i) => `<button class="chip tiny ${it.wu?.[i] ? "on" : ""}" data-a="wu" data-i="${i}">${fmtW(s.w)}×${s.r}</button>`).join("")}</div>` : ""}
@@ -809,7 +819,11 @@ const ACT = {
     it.done.push({ w, r });
     let note = "";
     if (it.done.length < it.sets) {
-      if (r >= it.max + 2 && !c.deload) { it.w = step(w, it.ex); it.bumped = true; note = e.assisted ? "Strong set! Less assist for the next one." : `Strong set! +${incOf(it.ex)} lb for the next one.`; }
+      if (r >= it.max + 2 && !c.deload) {
+        const n = jumps(r - it.max);
+        it.w = step(w, it.ex, n); it.bumped = true;
+        note = e.assisted ? "Strong set! Less assist for the next one." : `Strong set! +${incOf(it.ex) * n} lb for the next one.`;
+      }
       else if (r < it.min - 1) note = "That's under the range. Go a bit lighter next set.";
       startRest(it.rest);
     } else {
