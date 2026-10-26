@@ -279,7 +279,20 @@ function vSetup() {
 
 const FOCUS = { push: "Chest, shoulders, triceps", pull: "Back, rear delts, biceps", legs: "Legs" };
 function focusOf(d) { return d.sub || FOCUS[d.id.split("_")[0]] || [...new Set(d.items.map((i) => primary(i.ex)))].slice(0, 3).join(", "); }
-function minutesOf(d) { const s = d.items.reduce((a, i) => a + i.sets * (i.rest + 45), 0); return Math.max(20, Math.round(s / 60 / 5) * 5); }
+/**
+ * How long a day takes, rounded to 5 minutes. Once it's been done twice (mostly finished, 15 to 180
+ * minutes), the average of the last 3 sessions; before that, from the plan: 45 seconds per set,
+ * the rest between sets, a minute and a half between exercises, and 5 minutes of warm-up.
+ */
+function minutesOf(d) {
+  const planSets = d.items.reduce((a, i) => a + i.sets, 0);
+  const past = S.workouts.filter((w) => w.dayId === d.id && w.end && w.start)
+    .filter((w) => w.items.reduce((a, i) => a + i.sets.length, 0) >= planSets * 0.7 && w.end - w.start >= 15 * 60000 && w.end - w.start <= 180 * 60000)
+    .slice(-3);
+  if (past.length >= 2) return Math.max(5, Math.round(past.reduce((a, w) => a + (w.end - w.start), 0) / past.length / 60000 / 5) * 5);
+  const secs = d.items.reduce((a, i) => a + i.sets * 45 + (i.sets - 1) * i.rest + 90, 0) + 300;
+  return Math.max(20, Math.round(secs / 60 / 5) * 5);
+}
 const CHEV = `<svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>`;
 
 function vToday() {
@@ -296,7 +309,7 @@ function vToday() {
   if (adv) cards.push(`<div class="card tonal"><h3>Maybe take a lighter week?</h3><p>${adv} A lighter week now usually helps more than pushing through.</p><button class="btn tonal-btn" data-a="deloadNow">Start lighter week</button></div>`);
   if (S.workouts.length >= 5 && (!S.lastBackup || Date.now() - S.lastBackup > 30 * DAY)) cards.push(`<div class="card tonal"><h3>Save a backup</h3><p>Your workouts only live on this phone. A backup file keeps them safe.</p><button class="btn tonal-btn" data-a="export">Save backup</button></div>`);
 
-  const others = S.plan.map((d, i) => i === ni ? "" : `<button class="btn outline" data-a="startDay" data-i="${i}">${esc(d.name)}</button>`).join("");
+  const others = S.plan.map((d, i) => i === ni ? "" : `<button class="btn outline day-btn" data-a="startDay" data-i="${i}"><span>${esc(d.name)}</span><small>~${minutesOf(d)} min</small></button>`).join("");
   const pg = proteinOn(), pt = proteinTarget();
   return `<header class="page-head"><div><div class="eyebrow">${WEEKDAY[now.getDay()]}</div><h1>Let's lift</h1></div>${frog(60)}</header>
   ${cards.join("")}
@@ -494,7 +507,7 @@ function vPlan() {
   const ni = S.next % S.plan.length;
   const rows = S.plan.map((d, i) => `<li><button class="list-row" data-a="openDay" data-i="${i}">
       <span class="num ${i === ni ? "on" : ""}">${i + 1}</span>
-      <span class="grow"><span class="t">${esc(d.name)}${i === ni ? ' <span class="badge">next up</span>' : ""}</span><span class="muted small">${esc(focusOf(d))} · ${d.items.length} lifts</span></span>${CHEV}
+      <span class="grow"><span class="t">${esc(d.name)}${i === ni ? ' <span class="badge">next up</span>' : ""}</span><span class="muted small">${esc(focusOf(d))} · ${d.items.length} lifts · ~${minutesOf(d)} min</span></span>${CHEV}
     </button></li>`).join("");
   const pv = planVolume();
   const mrows = BM_MUSCLES.map((m) => { const v = r1(pv[m] || 0), cls = v >= 10 ? "good" : v >= 6 ? "mid" : "low";
