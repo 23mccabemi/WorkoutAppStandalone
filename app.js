@@ -727,6 +727,7 @@ function restDone() {
   beep();
   if (navigator.vibrate) navigator.vibrate([250, 120, 250]);
   document.body.classList.remove("flash"); void document.body.offsetWidth; document.body.classList.add("flash");
+  clearTimeout(ui.flashT); ui.flashT = setTimeout(() => document.body.classList.remove("flash"), 1700);
 }
 function startRest(sec) { S.cur.restEnd = Date.now() + sec * 1000; S.cur.restTotal = sec; ui.restFired = false; }
 

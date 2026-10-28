@@ -141,7 +141,7 @@ li.dragging{z-index:3;background:var(--card-hi);box-shadow:0 10px 28px rgba(0,0,
 .rest-in.go .btn{background:var(--accent-ink);color:var(--accent)}
 .rtime{font-size:26px;font-variant-numeric:tabular-nums}
 @keyframes pulse{50%{transform:scale(1.02)}}
-body.flash::after{content:"";position:fixed;inset:0;background:var(--accent);pointer-events:none;animation:flash 1.6s ease-out;z-index:50}
+body.flash::after{content:"";position:fixed;inset:0;background:var(--accent);pointer-events:none;opacity:0;animation:flash 1.6s ease-out forwards;z-index:50}
 @keyframes flash{0%,40%{opacity:.55}20%,60%{opacity:.1}100%{opacity:0}}
 
 /* focused workout */
